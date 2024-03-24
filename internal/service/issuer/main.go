@@ -1,6 +1,7 @@
 package issuer
 
 import (
+	"fmt"
 	"math/big"
 	"strconv"
 	"time"
@@ -26,7 +27,7 @@ type Issuer struct {
 func New(log *logan.Entry, config *config.IssuerConfig, login, password string) *Issuer {
 	return &Issuer{
 		client: req.C().
-			SetBaseURL(config.BaseUrl).
+			SetBaseURL(fmt.Sprintf("%s/%s", config.BaseUrl, config.DID.String())).
 			SetCommonBasicAuth(login, password).
 			SetLogger(log),
 		cfg: config,
@@ -98,7 +99,7 @@ func (is *Issuer) IssueVotingClaim(
 	response, err := is.client.R().
 		SetBodyJsonMarshal(credentialRequest).
 		SetSuccessResult(&result).
-		Post("/credentials")
+		Post(fmt.Sprintf("/claims"))
 	if err != nil {
 		return "", errors.Wrap(err, "failed to send post request")
 	}
@@ -116,7 +117,7 @@ func (is *Issuer) GetCredential(claimID uuid.UUID) (GetCredentialResponse, error
 	response, err := is.client.R().
 		SetSuccessResult(&cred).
 		SetPathParam("id", claimID.String()).
-		Get("/credentials/{id}")
+		Get("/claims/{id}")
 	if err != nil {
 		return GetCredentialResponse{}, errors.Wrap(err, "failed to send post request")
 	}
@@ -131,7 +132,7 @@ func (is *Issuer) GetCredential(claimID uuid.UUID) (GetCredentialResponse, error
 func (is *Issuer) RevokeClaim(revocationNonce int64) error {
 	response, err := is.client.R().
 		SetPathParam("nonce", strconv.FormatInt(revocationNonce, 10)).
-		Post("/credentials/revoke/{nonce}")
+		Post("/claims/revoke/{nonce}")
 	if err != nil {
 		return errors.Wrap(err, "failed to send post request")
 	}
