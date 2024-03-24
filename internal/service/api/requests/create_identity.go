@@ -2,15 +2,20 @@ package requests
 
 import (
 	"encoding/json"
+	"net/http"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/google/uuid"
 	"github.com/iden3/go-iden3-core/v2/w3c"
 	snarkTypes "github.com/iden3/go-rapidsnark/types"
 	"gitlab.com/distributed_lab/logan/v3/errors"
-	"net/http"
 )
 
 type CreateIdentityRequestData struct {
 	ID          *w3c.DID           `json:"id"`
 	ZKProof     snarkTypes.ZKProof `json:"zkproof"`
+	UserID      uuid.UUID          `json:"user_id"`
+	UserAddress common.Address     `json:"user_address"`
 	DocumentSOD struct {
 		SignedAttributes    string `json:"signed_attributes"`
 		Algorithm           string `json:"algorithm"`

@@ -1,6 +1,7 @@
 -- +migrate Up
 create table claims(
     id            uuid primary key,
+    user_id       uuid not null,
     user_did      text not null,
     issuer_did    text not null,
     document_hash text not null,

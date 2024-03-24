@@ -5,6 +5,7 @@
 package resources
 
 type ClaimAttributes struct {
-	ClaimId   string `json:"claim_id"`
-	IssuerDid string `json:"issuer_did"`
+	ClaimId   string  `json:"claim_id"`
+	IssuerDid string  `json:"issuer_did"`
+	UserId    *string `json:"user_id,omitempty"`
 }

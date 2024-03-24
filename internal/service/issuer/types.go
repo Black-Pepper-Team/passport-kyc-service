@@ -2,8 +2,9 @@ package issuer
 
 import (
 	"encoding/json"
-	"gitlab.com/distributed_lab/logan/v3/errors"
 	"time"
+
+	"gitlab.com/distributed_lab/logan/v3/errors"
 )
 
 var (
@@ -29,6 +30,10 @@ type CredentialSubject struct {
 	IssuingAuthority  int64  `json:"issuingAuthority"`
 	DocumentNullifier string `json:"documentNullifier"`
 	CredentialHash    string `json:"credentialHash"`
+	UserID            string `json:"userid"`
+	Features          string `json:"f"`
+	UserAddress       string `json:"pk"`
+	Metadata          string `json:"metadata"`
 }
 
 type GetCredentialResponse struct {

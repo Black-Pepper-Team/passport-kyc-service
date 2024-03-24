@@ -1,16 +1,19 @@
 package issuer
 
 import (
-	"github.com/google/uuid"
 	"math/big"
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/google/uuid"
+
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/imroc/req/v3"
-	"github.com/rarimo/passport-identity-provider/internal/config"
 	"gitlab.com/distributed_lab/logan/v3"
 	"gitlab.com/distributed_lab/logan/v3/errors"
+
+	"github.com/rarimo/passport-identity-provider/internal/config"
 )
 
 type Issuer struct {
@@ -36,7 +39,15 @@ func (is *Issuer) DID() string {
 }
 
 func (is *Issuer) IssueVotingClaim(
-	id string, issuingAuthority int64, isAdult bool, expiration *time.Time, dg2 []byte, blinder *big.Int,
+	id string,
+	issuingAuthority int64,
+	isAdult bool,
+	expiration *time.Time,
+	dg2 []byte,
+	blinder *big.Int,
+	userAddress common.Address,
+	userId uuid.UUID,
+	documentHash string,
 ) (string, error) {
 	var result UUIDResponse
 
@@ -74,6 +85,10 @@ func (is *Issuer) IssueVotingClaim(
 			IsAdult:           isAdult,
 			DocumentNullifier: nullifierHash.String(),
 			CredentialHash:    credentialHash.String(),
+			UserID:            userId.String(),
+			UserAddress:       userAddress.String(),
+			Metadata:          "_",
+			Features:          documentHash,
 		},
 		Expiration:     expiration,
 		MtProof:        true,

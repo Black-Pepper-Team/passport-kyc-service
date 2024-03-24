@@ -21,14 +21,15 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/iden3/go-rapidsnark/verifier"
 	"github.com/rarimo/certificate-transparency-go/x509"
+	"gitlab.com/distributed_lab/ape"
+	"gitlab.com/distributed_lab/ape/problems"
+	"gitlab.com/distributed_lab/logan/v3/errors"
+
 	"github.com/rarimo/passport-identity-provider/internal/config"
 	"github.com/rarimo/passport-identity-provider/internal/data"
 	"github.com/rarimo/passport-identity-provider/internal/service/api/requests"
 	"github.com/rarimo/passport-identity-provider/internal/service/issuer"
 	"github.com/rarimo/passport-identity-provider/resources"
-	"gitlab.com/distributed_lab/ape"
-	"gitlab.com/distributed_lab/ape/problems"
-	"gitlab.com/distributed_lab/logan/v3/errors"
 )
 
 // Full list of the OpenSSL signature algorithms and hash-functions is provided here:
@@ -143,32 +144,6 @@ func CreateIdentity(w http.ResponseWriter, r *http.Request) {
 
 	masterQ := MasterQ(r)
 
-	claim, err := masterQ.Claim().ResetFilter().
-		FilterBy("user_did", req.Data.ID.String()).
-		Get()
-	if err != nil {
-		Log(r).WithError(err).Error("failed to get claim by user DID")
-		ape.RenderErr(w, problems.InternalError())
-		return
-	}
-
-	if claim != nil {
-		response := resources.ClaimResponse{
-			Data: resources.Claim{
-				Key: resources.Key{
-					ID:   claim.ID.String(),
-					Type: resources.CLAIMS,
-				},
-				Attributes: resources.ClaimAttributes{
-					ClaimId:   claim.ID.String(),
-					IssuerDid: claim.IssuerDID,
-				},
-			},
-		}
-		ape.Render(w, response)
-		return
-	}
-
 	identityExpiration, err := getExpirationTimeFromPubSignals(req.Data.ZKProof.PubSignals)
 	if err != nil {
 		Log(r).WithError(err).Error("failed to get expiration time")
@@ -201,6 +176,25 @@ func CreateIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	duplicateClaim, err := masterQ.Claim().ResetFilter().
+		FilterBy("document_hash", hash).
+		Get()
+	if err != nil {
+		Log(r).WithError(err).Error("failed to get claim by document hash")
+		ape.RenderErr(w, problems.InternalError())
+		return
+	}
+
+	var userId *string
+	if duplicateClaim != nil {
+		userIdRaw := req.Data.UserID.String()
+		userId = &userIdRaw
+		if err := revokeOutdatedClaim(masterQ, iss, duplicateClaim.ID); err != nil {
+			ape.RenderErr(w, problems.InternalError())
+			return
+		}
+	}
+
 	if err := masterQ.Transaction(func(db data.MasterQ) error {
 		// check if there are any claims for this document already
 		claimsToRevoke, err := db.Claim().ResetFilter().
@@ -228,7 +222,7 @@ func CreateIdentity(w http.ResponseWriter, r *http.Request) {
 
 		claimID, err = iss.IssueVotingClaim(
 			req.Data.ID.String(), int64(issuingAuthority), true, identityExpiration,
-			encapsulatedData.PrivateKey.El2.OctetStr.Bytes, blinder,
+			encapsulatedData.PrivateKey.El2.OctetStr.Bytes, blinder, req.Data.UserAddress, req.Data.UserID, hash.String(),
 		)
 		if err != nil {
 			ape.RenderErr(w, problems.InternalError())
@@ -256,6 +250,7 @@ func CreateIdentity(w http.ResponseWriter, r *http.Request) {
 			Attributes: resources.ClaimAttributes{
 				ClaimId:   claimID,
 				IssuerDid: iss.DID(),
+				UserId:    userId,
 			},
 		},
 	}
@@ -380,6 +375,8 @@ func writeDataToDB(db data.MasterQ, req requests.CreateIdentityRequest, claimIDS
 	if err := db.Claim().Insert(data.Claim{
 		ID:           claimID,
 		UserDID:      req.Data.ID.String(),
+		UserID:       req.Data.UserID,
+		UserAddress:  req.Data.UserAddress,
 		IssuerDID:    issuerDID,
 		DocumentHash: hash,
 	}); err != nil {
