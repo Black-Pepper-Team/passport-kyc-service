@@ -176,25 +176,7 @@ func CreateIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duplicateClaim, err := masterQ.Claim().ResetFilter().
-		FilterBy("document_hash", hash).
-		Get()
-	if err != nil {
-		Log(r).WithError(err).Error("failed to get claim by document hash")
-		ape.RenderErr(w, problems.InternalError())
-		return
-	}
-
 	var userId *string
-	if duplicateClaim != nil {
-		userIdRaw := req.Data.UserID.String()
-		userId = &userIdRaw
-		if err := revokeOutdatedClaim(masterQ, iss, duplicateClaim.ID); err != nil {
-			ape.RenderErr(w, problems.InternalError())
-			return
-		}
-	}
-
 	if err := masterQ.Transaction(func(db data.MasterQ) error {
 		// check if there are any claims for this document already
 		claimsToRevoke, err := db.Claim().ResetFilter().
@@ -208,11 +190,14 @@ func CreateIdentity(w http.ResponseWriter, r *http.Request) {
 
 		// revoke if so
 		for _, claimToRevoke := range claimsToRevoke {
-			timeoutExpiration := claimToRevoke.CreatedAt.UTC().Add(cfg.RegistrationTimeout)
-			if time.Now().UTC().Before(timeoutExpiration) {
-				ape.RenderErr(w, problems.TooManyRequests())
-				return errors.New("registration timeout is not expired")
-			}
+			userIdRaw := req.Data.UserID.String()
+			userId = &userIdRaw
+
+			//timeoutExpiration := claimToRevoke.CreatedAt.UTC().Add(cfg.RegistrationTimeout)
+			//if time.Now().UTC().Before(timeoutExpiration) {
+			//	ape.RenderErr(w, problems.TooManyRequests())
+			//	return errors.New("registration timeout is not expired")
+			//}
 
 			if err := revokeOutdatedClaim(db, iss, claimToRevoke.ID); err != nil {
 				ape.RenderErr(w, problems.InternalError())
@@ -354,7 +339,7 @@ func revokeOutdatedClaim(db data.MasterQ, iss *issuer.Issuer, claimID uuid.UUID)
 	}
 
 	if !cred.Revoked {
-		if err := iss.RevokeClaim(cred.RevNonce); err != nil {
+		if err := iss.RevokeClaim(cred.CredentialStatus.RevocationNonce); err != nil {
 			return errors.Wrap(err, "failed to revoke claim")
 		}
 	}
